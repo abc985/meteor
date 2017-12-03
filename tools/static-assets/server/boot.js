@@ -42,6 +42,40 @@ if (!process.env.APP_ID) {
 // Map from load path to its source map.
 var parsedSourceMaps = {};
 
+const meteorDebugFuture =
+  process.env.METEOR_INSPECT_BRK ? new Future : null;
+
+if (meteorDebugFuture) {
+  process.on("message", function onDebugMessage(msg) {
+    if (msg && msg.meteorDebugCommand === "continue") {
+      process.removeListener("message", onDebugMessage);
+      // After the "continue" message is received, the Chrome DevTools
+      // debugger still needs a small amount of time to get ready to pause
+      // at the debugger statement in ./debug.js.
+      setTimeout(() => meteorDebugFuture.return(true), 500);
+    }
+  });
+}
+
+function maybeWaitForDebuggerToAttach() {
+  if (meteorDebugFuture) {
+    // This setTimeout not only puts a reasonable time limit on the
+    // debugger attaching, but also keeps the process alive by preventing
+    // the event loop from running empty while the Fiber yields.
+    const timer = setTimeout(() => {
+      console.error("Debugger did not attach after 5 minutes; continuing.");
+      meteorDebugFuture.return(false);
+    }, 5 * 60 * 1000);
+
+    const shouldPause = meteorDebugFuture.wait();
+    clearTimeout(timer);
+
+    if (shouldPause) {
+      require("./debug.js");
+    }
+  }
+}
+
 // Read all the source maps into memory once.
 _.each(serverJson.load, function (fileInfo) {
   if (fileInfo.sourceMap) {
@@ -155,6 +189,8 @@ var specialArgPaths = {
 };
 
 var loadServerBundles = Profile("Load server bundles", function () {
+  var infos = [];
+
   _.each(serverJson.load, function (fileInfo) {
     var code = fs.readFileSync(path.resolve(serverDir, fileInfo.path));
     var nonLocalNodeModulesPaths = [];
@@ -326,17 +362,30 @@ var loadServerBundles = Profile("Load server bundles", function () {
 
     var scriptPath =
       parsedSourceMaps[absoluteFilePath] ? absoluteFilePath : fileInfoOSPath;
-    // The final 'true' is an undocumented argument to runIn[Foo]Context that
-    // causes it to print out a descriptive error message on parse error. It's
-    // what require() uses to generate its errors.
-    var func = require('vm').runInThisContext(wrapped, scriptPath, true);
+
+    var script = new (require('vm').Script)(wrapped, {
+      filename: scriptPath,
+      displayErrors: true
+    });
+
+    var func = script.runInThisContext();
+
     var args = [Npm, Assets];
 
     specialKeys.forEach(function (key) {
       args.push(specialArgs[key]);
     });
 
-    Profile(fileInfo.path, func).apply(global, args);
+    infos.push({
+      fn: Profile(fileInfo.path, func),
+      args
+    });
+  });
+
+  maybeWaitForDebuggerToAttach();
+
+  infos.forEach(info => {
+    info.fn.apply(global, info.args);
   });
 });
 

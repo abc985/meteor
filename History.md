@@ -1,3 +1,41 @@
+
+* Node has been upgraded to version 8.6.0.
+
+* The `npm` npm package has been upgraded to version 5.4.2, a major
+  upgrade from 4.6.1, requiring internal updates to dependency management
+  logic for Meteor packages that use `Npm.depends`. While these changes
+  should be backwards-compatible for existing Meteor packages, if you are
+  the maintainer of any packages, you should pay close attention to your
+  `npm-shrinkwrap.json` files when first using this version of `npm`. For
+  normal Meteor application development, this change primarily affects the
+  version of `npm` used by `meteor npm ...` commands.
+  [PR #8835](https://github.com/meteor/meteor/pull/8835)
+
+* The `meteor-babel` package has been upgraded to version 0.24.6, to take
+  better advantage of native language features in Node 8.
+
+* The `reify` npm package has been upgraded to version 0.12.3.
+
+* The `meteor-promise` package has been upgraded to version 0.8.6, to
+  enable better handling of `UnhandledPromiseRejectionWarning`s.
+
+* The `node-gyp` npm package has been upgraded to version 3.6.2.
+
+* The `node-pre-gyp` npm package has been updated to version 0.6.36.
+
+* The `fibers` npm package has been upgraded to version 2.0.0.
+
+* The `pathwatcher` npm package has been upgraded to version 7.1.0.
+
+* The `http-proxy` npm package has been upgraded to version 1.16.2.
+
+* The `semver` npm package has been upgraded to version 5.4.1.
+
+* When running Meteor tool tests (i.e. `./meteor self-test`) during the
+  course of developing Meteor itself, it is no longer necessary to
+  `./meteor npm install -g phantomjs-prebuilt browserstack-webdriver`.
+  These will now be installed automatically upon their use.
+
 ## v1.5.2.2, 2017-10-02
 
 * Fixes a regression in 1.5.2.1 which resulted in the macOS firewall
@@ -547,7 +585,7 @@
 * The `node-gyp` npm package has been upgraded to 3.6.0 which
   adds support for VS2017 on Windows.
 
-* The `node-pre-gyp` npm package has been updated to 0.6.36.
+* The `node-pre-gyp` npm package has been updated to 0.6.34.
 
 * Thanks to the outstanding efforts of @sethmurphy18, the `minifier-js`
   package now uses [Babili](https://github.com/babel/babili) instead of

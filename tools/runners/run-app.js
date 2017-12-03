@@ -72,7 +72,6 @@ var AppProcess = function (options) {
 
   self.proc = null;
   self.madeExitCallback = false;
-  self.ipcPipe = options.ipcPipe;
 };
 
 _.extend(AppProcess.prototype, {
@@ -101,9 +100,10 @@ _.extend(AppProcess.prototype, {
 
     eachline(self.proc.stderr, function (line) {
       if (self.debugPort &&
-          line.indexOf("Debugger listening on") >= 0) {
-        Console.enableProgressDisplay(false);
-        return;
+          line.indexOf("Debugger attached") >= 0) {
+        self.proc.send({
+          meteorDebugCommand: "continue"
+        });
       }
 
       runLog.logAppOutput(line, true);
@@ -212,6 +212,12 @@ _.extend(AppProcess.prototype, {
     env.HTTP_FORWARDED_COUNT =
       "" + ((parseInt(process.env['HTTP_FORWARDED_COUNT']) || 0) + 1);
 
+    if (self.debugPort) {
+      env.METEOR_INSPECT_BRK = self.debugPort;
+    } else {
+      delete env.METEOR_INSPECT_BRK;
+    }
+
     var shellDir = self.projectContext.getMeteorShellDirectory();
     files.mkdir_p(shellDir);
 
@@ -246,13 +252,8 @@ _.extend(AppProcess.prototype, {
     // Setting options
     var opts = _.clone(self.nodeOptions);
 
-    var attach;
     if (self.debugPort) {
-      attach = require('../inspector.js').start(self.debugPort, entryPoint);
-
-      // If you do opts.push("--debug", port) it doesn't work on Windows
-      // for some reason.
-      opts.push("--debug=" + attach.suggestedDebugBrkPort);
+      opts.push("--inspect=" + self.debugPort);
     }
 
     opts.push(entryPoint);
@@ -261,16 +262,10 @@ _.extend(AppProcess.prototype, {
     var child_process = require('child_process');
     // setup the 'ipc' pipe if further communication between app and proxy is
     // expected
-    var ioOptions = self.ipcPipe ? ['pipe', 'pipe', 'pipe', 'ipc'] : 'pipe';
     var child = child_process.spawn(nodePath, opts, {
       env: self._computeEnvironment(),
-      stdio: ioOptions
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
-
-    // Attach inspector
-    if (attach) {
-      attach(child);
-    }
 
     return child;
   }
@@ -740,7 +735,6 @@ _.extend(AppRunner.prototype, {
       nodePath: _.map(bundleResult.nodePath, files.convertToOSPath),
       settings: settings,
       testMetadata: self.testMetadata,
-      ipcPipe: self.watchForChanges
     });
 
     if (options.firstRun && self._beforeStartPromise) {

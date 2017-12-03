@@ -16,8 +16,6 @@ var Console = require('../console/console.js').Console;
 var projectContextModule = require('../project-context.js');
 var release = require('../packaging/release.js');
 
-import * as cordova from '../cordova';
-import { CordovaProject } from '../cordova/project.js';
 import { CordovaRunner } from '../cordova/runner.js';
 import { iOSRunTarget, AndroidRunTarget } from '../cordova/run-targets.js';
 
@@ -352,15 +350,24 @@ function doRunCommand(options) {
 
   let cordovaRunner;
   if (!_.isEmpty(runTargets)) {
-    main.captureAndExit('', 'preparing Cordova project', () => {
-      const cordovaProject = new CordovaProject(projectContext, {
-        settingsFile: options.settings,
-        mobileServerUrl: utils.formatUrl(parsedMobileServerUrl) });
-      if (buildmessage.jobHasMessages()) return;
 
-      cordovaRunner = new CordovaRunner(cordovaProject, runTargets);
-      cordovaRunner.checkPlatformsForRunTargets();
-    });
+    function prepareCordovaProject() {
+      import { CordovaProject } from '../cordova/project.js';
+
+      main.captureAndExit('', 'preparing Cordova project', () => {
+        const cordovaProject = new CordovaProject(projectContext, {
+          settingsFile: options.settings,
+          mobileServerUrl: utils.formatUrl(parsedMobileServerUrl) });
+        if (buildmessage.jobHasMessages()) return;
+
+        cordovaRunner = new CordovaRunner(cordovaProject, runTargets);
+        cordovaRunner.checkPlatformsForRunTargets();
+      });
+    }
+
+    import { ensureDevBundleDependencies } from '../cordova';
+    ensureDevBundleDependencies();
+    prepareCordovaProject();
   }
 
   var runAll = require('../runners/run-all.js');
@@ -395,7 +402,7 @@ main.registerCommand(_.extend(
   { name: 'debug' },
   runCommandOptions
 ), function (options) {
-  options['debug-port'] = options['debug-port'] || '5858';
+  options['debug-port'] = options['debug-port'] || '9229';
   return doRunCommand(options);
 });
 
@@ -532,7 +539,7 @@ main.registerCommand({
         },
         transformContents: function (contents, f) {
           if ((/(\.html|\.js|\.css)/).test(f)) {
-            return new Buffer(transform(contents.toString()));
+            return Buffer.from(transform(contents.toString()));
           } else {
             return contents;
           }
@@ -700,7 +707,7 @@ main.registerCommand({
     },
     transformContents: function (contents, f) {
       if ((/(\.html|\.js|\.css)/).test(f)) {
-        return new Buffer(transform(contents.toString()));
+        return Buffer.from(transform(contents.toString()));
       } else {
         return contents;
       }
@@ -992,16 +999,27 @@ ${Console.command("meteor build ../output")}`,
   }
 
   if (!_.isEmpty(cordovaPlatforms)) {
-    let cordovaProject;
 
+    let cordovaProject;
     main.captureAndExit('', () => {
+
+      import {
+        ensureDevBundleDependencies,
+        pluginVersionsFromStarManifest,
+        displayNameForPlatform,
+      } from '../cordova';
+
+      ensureDevBundleDependencies();
+
       buildmessage.enterJob({ title: "preparing Cordova project" }, () => {
+        import { CordovaProject } from '../cordova/project.js';
+
         cordovaProject = new CordovaProject(projectContext, {
           settingsFile: options.settings,
           mobileServerUrl: utils.formatUrl(parsedMobileServerUrl) });
         if (buildmessage.jobHasMessages()) return;
 
-        const pluginVersions = cordova.pluginVersionsFromStarManifest(
+        const pluginVersions = pluginVersionsFromStarManifest(
           bundleResult.starManifest);
 
         cordovaProject.prepareFromAppBundle(bundlePath, pluginVersions);
@@ -1010,7 +1028,7 @@ ${Console.command("meteor build ../output")}`,
       for (platform of cordovaPlatforms) {
         buildmessage.enterJob(
           { title: `building Cordova app for \
-${cordova.displayNameForPlatform(platform)}` }, () => {
+${displayNameForPlatform(platform)}` }, () => {
             let buildOptions = { release: !options.debug };
 
             const buildPath = files.pathJoin(
@@ -1745,16 +1763,24 @@ function doTestCommand(options) {
   let cordovaRunner;
 
   if (!_.isEmpty(runTargets)) {
-    main.captureAndExit('', 'preparing Cordova project', () => {
-      const cordovaProject = new CordovaProject(projectContext, {
-        settingsFile: options.settings,
-        mobileServerUrl: utils.formatUrl(parsedMobileServerUrl) });
-      if (buildmessage.jobHasMessages()) return;
+    function prepareCordovaProject() {
+      main.captureAndExit('', 'preparing Cordova project', () => {
+        import { CordovaProject } from '../cordova/project.js';
 
-      cordovaRunner = new CordovaRunner(cordovaProject, runTargets);
-      projectContext.platformList.write(cordovaRunner.platformsForRunTargets);
-      cordovaRunner.checkPlatformsForRunTargets();
-    });
+        const cordovaProject = new CordovaProject(projectContext, {
+          settingsFile: options.settings,
+          mobileServerUrl: utils.formatUrl(parsedMobileServerUrl) });
+        if (buildmessage.jobHasMessages()) return;
+
+        cordovaRunner = new CordovaRunner(cordovaProject, runTargets);
+        projectContext.platformList.write(cordovaRunner.platformsForRunTargets);
+        cordovaRunner.checkPlatformsForRunTargets();
+      });
+    }
+
+    import { ensureDevBundleDependencies } from '../cordova';
+    ensureDevBundleDependencies();
+    prepareCordovaProject();
   }
 
   options.cordovaRunner = cordovaRunner;

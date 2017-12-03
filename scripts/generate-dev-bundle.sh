@@ -61,6 +61,20 @@ rm -rf "${MONGO_NAME}"
 export PATH="$DIR/bin:$PATH"
 
 cd "$DIR/lib"
+
+# Make node-gyp install Node headers and libraries in $DIR/.node-gyp/.
+# https://github.com/nodejs/node-gyp/blob/4ee31329e0/lib/node-gyp.js#L52
+export HOME="$DIR"
+export USERPROFILE="$DIR"
+
+# Make sure the latest version of node-gyp is installed at the top level.
+npm install node-gyp
+
+node "${DIR}/lib/node_modules/node-gyp/bin/node-gyp.js" install
+INCLUDE_PATH="${DIR}/.node-gyp/${NODE_VERSION}/include/node"
+echo "Contents of ${INCLUDE_PATH}:"
+ls -al "$INCLUDE_PATH"
+
 # Overwrite the bundled version with the latest version of npm.
 npm install "npm@$NPM_VERSION"
 
@@ -140,14 +154,12 @@ delete () {
     rm -rf "$1"
 }
 
-delete npm/test
 delete npm/node_modules/node-gyp
 pushd npm/node_modules
 ln -s ../../node-gyp ./
 popd
 
 delete sqlite3/deps
-delete sqlite3/node_modules/nan
 delete sqlite3/node_modules/node-pre-gyp
 delete wordwrap/test
 delete moment/min
